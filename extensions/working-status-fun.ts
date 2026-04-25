@@ -2,7 +2,10 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 
 const STATUSES = [
 	"Horsing around...",
-  "Fucking around...",
+  "Burning tokens for no good reason...",
+  "rm -rf'ing...",
+  "1001 1101 1110 0001'ing...",
+  "Entslopifying...",
   "Consulting the void...",
   "Bribing the compiler...",
   "Creating black holes...",
