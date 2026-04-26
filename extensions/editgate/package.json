@@ -1,0 +1,29 @@
+{
+  "name": "editgate",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Bootstrap scaffold for pi extension development.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.6.0"
+  },
+  "scripts": {
+    "dev": "pi -e ./src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "devDependencies": {
+    "@a5c-ai/babysitter-sdk": "^0.0.187",
+    "@mariozechner/pi-coding-agent": "^0.70.2",
+    "@mariozechner/pi-tui": "^0.70.2",
+    "@sinclair/typebox": "^0.34.41",
+    "@types/node": "^25.6.0",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3"
+  }
+}
