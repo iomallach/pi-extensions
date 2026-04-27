@@ -1,9 +1,9 @@
-import type { EditToolInput, WriteToolInput } from "@mariozechner/pi-coding-agent";
+import type { EditToolInput } from "@mariozechner/pi-coding-agent";
 import { access, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { buildDiffData, getProposalLanguage } from "./diff.js";
-import type { EditProposal, GateProposal, WriteProposal } from "./types.js";
+import type { EditProposal, GateProposal, ReasonedEditToolInput, ReasonedWriteToolInput, WriteProposal } from "./types.js";
 
 async function readFileIfPresent(path: string): Promise<string> {
   try {
@@ -54,16 +54,46 @@ function applyEditPreview(content: string, edits: EditToolInput["edits"]): strin
   return next;
 }
 
-function defaultReason(toolName: "edit" | "write", path: string): string {
-  return toolName === "edit"
-    ? `Agent proposed targeted edits for ${path}.`
-    : `Agent proposed writing ${path}.`;
+function normalizeExplicitReason(reason: string | undefined): string | undefined {
+  const normalized = reason?.replace(/\s+/g, " ").trim();
+  return normalized && normalized.length > 0 ? normalized : undefined;
 }
 
-export async function createEditProposal(cwd: string, input: EditToolInput): Promise<EditProposal> {
+function summarizeDiff(additions: number, removals: number): string {
+  if (additions === 0 && removals === 0) return "without textual line changes";
+  if (additions > 0 && removals > 0) return `changing ${additions} line(s) and removing ${removals} line(s)`;
+  if (additions > 0) return `adding ${additions} line(s)`;
+  return `removing ${removals} line(s)`;
+}
+
+function previewText(text: string): string | undefined {
+  const line = text
+    .split(/\r?\n/)
+    .map((part) => part.trim())
+    .find((part) => part.length > 0);
+  if (!line) return undefined;
+  return line.length > 72 ? `${line.slice(0, 69)}...` : line;
+}
+
+function fallbackEditReason(input: ReasonedEditToolInput, additions: number, removals: number): string {
+  const count = input.edits.length;
+  const firstNewText = previewText(input.edits[0]?.newText ?? "");
+  const summary = `Review ${count} targeted replacement(s) in ${input.path}, ${summarizeDiff(additions, removals)}.`;
+  return firstNewText ? `${summary} First changed text starts with: “${firstNewText}”.` : summary;
+}
+
+function fallbackWriteReason(input: ReasonedWriteToolInput, originalContent: string, additions: number, removals: number): string {
+  const verb = originalContent.length === 0 ? "Create" : "Overwrite";
+  const firstContent = previewText(input.content);
+  const summary = `Review ${verb.toLowerCase()} of ${input.path}, ${summarizeDiff(additions, removals)}.`;
+  return firstContent ? `${summary} New content starts with: “${firstContent}”.` : summary;
+}
+
+export async function createEditProposal(cwd: string, input: ReasonedEditToolInput): Promise<EditProposal> {
   const absolutePath = resolve(cwd, input.path);
   const originalContent = await readFile(absolutePath, "utf8");
   const nextContent = applyEditPreview(originalContent, input.edits);
+  const diff = buildDiffData(originalContent, nextContent);
 
   return {
     toolName: "edit",
@@ -72,16 +102,17 @@ export async function createEditProposal(cwd: string, input: EditToolInput): Pro
     language: getProposalLanguage(input.path),
     originalContent,
     nextContent,
-    diff: buildDiffData(originalContent, nextContent),
-    reason: defaultReason("edit", input.path),
+    diff,
+    reason: normalizeExplicitReason(input.reason) ?? fallbackEditReason(input, diff.additions, diff.removals),
     manualEditApplied: false,
     input,
   };
 }
 
-export async function createWriteProposal(cwd: string, input: WriteToolInput): Promise<WriteProposal> {
+export async function createWriteProposal(cwd: string, input: ReasonedWriteToolInput): Promise<WriteProposal> {
   const absolutePath = resolve(cwd, input.path);
   const originalContent = await readFileIfPresent(absolutePath);
+  const diff = buildDiffData(originalContent, input.content);
 
   return {
     toolName: "write",
@@ -90,8 +121,8 @@ export async function createWriteProposal(cwd: string, input: WriteToolInput): P
     language: getProposalLanguage(input.path),
     originalContent,
     nextContent: input.content,
-    diff: buildDiffData(originalContent, input.content),
-    reason: defaultReason("write", input.path),
+    diff,
+    reason: normalizeExplicitReason(input.reason) ?? fallbackWriteReason(input, originalContent, diff.additions, diff.removals),
     manualEditApplied: false,
     input,
   };

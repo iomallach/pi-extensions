@@ -1,5 +1,8 @@
 import type { EditToolInput, WriteToolInput } from "@mariozechner/pi-coding-agent";
 
+export type ReasonedEditToolInput = EditToolInput & { reason?: string };
+export type ReasonedWriteToolInput = WriteToolInput & { reason?: string };
+
 export type GateToolName = "edit" | "write";
 export type DiffKind = "context" | "add" | "remove";
 
@@ -40,12 +43,12 @@ interface ProposalBase {
 
 export interface EditProposal extends ProposalBase {
   toolName: "edit";
-  input: EditToolInput;
+  input: ReasonedEditToolInput;
 }
 
 export interface WriteProposal extends ProposalBase {
   toolName: "write";
-  input: WriteToolInput;
+  input: ReasonedWriteToolInput;
 }
 
 export type GateProposal = EditProposal | WriteProposal;

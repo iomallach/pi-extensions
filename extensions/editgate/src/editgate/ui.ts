@@ -169,7 +169,16 @@ export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal
       }
 
       push(theme.fg("accent", "─".repeat(width)));
-      push(theme.fg("dim", "j/k scroll • ctrl-u/ctrl-d page • v toggle view • a approve • s steer • e edit • d deny • esc cancel"));
+      push(theme.fg("dim", "j/k scroll • ctrl-u/ctrl-d page • v toggle unified/split"));
+      push(
+        [
+          theme.fg("success", "a approve"),
+          theme.fg("warning", "s steer"),
+          theme.fg("warning", "e edit"),
+          theme.fg("error", "d deny"),
+          "esc cancel",
+        ].join(theme.fg("dim", " • ")),
+      );
       push(theme.fg("accent", "─".repeat(width)));
       cached = lines;
       return lines;
