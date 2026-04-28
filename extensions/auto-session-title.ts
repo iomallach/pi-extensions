@@ -225,6 +225,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		inFlight = false;
+    if (!ctx.hasUi) return;
 		if (pi.getSessionName()) {
 			return;
 		}
@@ -235,6 +236,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("agent_end", async (_event, ctx) => {
+    if (!ctx.hasUi) return;
 		if (pi.getSessionName()) {
 			return;
 		}
