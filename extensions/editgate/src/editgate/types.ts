@@ -53,7 +53,9 @@ export interface WriteProposal extends ProposalBase {
 
 export type GateProposal = EditProposal | WriteProposal;
 
-export type ReviewAction = "approve" | "deny" | "steer" | "edit" | "cancel";
+export type ReviewAction = "approve" | "deny" | "steer" | "cancel";
+
+export type ReviewUiResult = ReviewAction | { kind: "edit"; nextContent: string };
 
 export type ReviewOutcome =
   | { kind: "approve"; proposal: GateProposal }

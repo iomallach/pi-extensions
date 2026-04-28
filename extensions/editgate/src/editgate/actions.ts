@@ -40,15 +40,8 @@ export async function reviewProposal(
       }
       return { kind: "steer", feedback: feedback.trim() };
     }
-    if (action === "edit") {
-      const edited = await ctx.ui.editor(
-        "Manually edit proposed file content (Ctrl+G opens $EDITOR)",
-        proposal.nextContent,
-      );
-      if (edited === undefined) {
-        continue;
-      }
-      proposal = withEditedContent(proposal, edited);
+    if (typeof action === "object" && action.kind === "edit") {
+      proposal = withEditedContent(proposal, action.nextContent);
     }
   }
 }
