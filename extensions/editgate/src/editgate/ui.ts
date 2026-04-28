@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 
 import type { ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import { highlightCode } from "@mariozechner/pi-coding-agent";
-import { Key, matchesKey, truncateToWidth, type TUI } from "@mariozechner/pi-tui";
+import { Key, matchesKey, truncateToWidth, wrapTextWithAnsi, type TUI } from "@mariozechner/pi-tui";
 
 import { kindPrefix } from "./diff.js";
 import type { DiffRow, GateProposal, ReviewUiResult } from "./types.js";
@@ -188,6 +188,11 @@ export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal
 
       const lines: string[] = [];
       const push = (line = "") => lines.push(truncateToWidth(line, width));
+      const pushWrapped = (text: string) => {
+        for (const line of wrapTextWithAnsi(text, Math.max(1, width))) {
+          push(line);
+        }
+      };
       const rows = proposal.diff.rows;
       const pageEnd = Math.min(rows.length, offset + VIEWPORT_HEIGHT);
 
@@ -196,7 +201,7 @@ export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal
       push(
         `${theme.fg("muted", proposal.toolName.toUpperCase())}  ${theme.fg("dim", "changes:")} ${theme.fg("success", `+${proposal.diff.additions}`)} ${theme.fg("error", `-${proposal.diff.removals}`)}`,
       );
-      push(theme.fg("muted", proposal.reason));
+      pushWrapped(theme.fg("muted", proposal.reason));
       push(theme.fg("dim", `rows ${rows.length === 0 ? 0 : offset + 1}-${pageEnd} of ${rows.length}`));
       push(theme.fg("accent", "─".repeat(width)));
 
