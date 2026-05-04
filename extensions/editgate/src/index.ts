@@ -84,18 +84,9 @@ export default function editgate(pi: ExtensionAPI) {
     if (typeof api.getActiveTools !== "function" || typeof api.setActiveTools !== "function") return;
 
     const activeTools = api.getActiveTools();
-    const withoutReasonTool = activeTools.filter((toolName) => toolName !== EDITGATE_REASON_TOOL_NAME);
+    if (activeTools.includes(EDITGATE_REASON_TOOL_NAME)) return;
 
-    if (editgateEnabled) {
-      if (!activeTools.includes(EDITGATE_REASON_TOOL_NAME)) {
-        api.setActiveTools([...withoutReasonTool, EDITGATE_REASON_TOOL_NAME]);
-      }
-      return;
-    }
-
-    if (withoutReasonTool.length !== activeTools.length) {
-      api.setActiveTools(withoutReasonTool);
-    }
+    api.setActiveTools([...activeTools, EDITGATE_REASON_TOOL_NAME]);
   };
 
   const setStatus = (ctx: { ui: { setStatus: (key: string, text: string | undefined) => void } }) => {
@@ -192,17 +183,15 @@ export default function editgate(pi: ExtensionAPI) {
     setStatus(ctx);
 
     if (event.toolName === EDITGATE_REASON_TOOL_NAME) {
-      if (!editgateEnabled) {
-        return { block: true, reason: `Blocked ${EDITGATE_REASON_TOOL_NAME}: editgate is off. Enable it with /editgate:on before using this tool.` };
-      }
-
       const reason = normalizeReason((event.input as { reason?: string } | undefined)?.reason);
       if (!reason) {
         return { block: true, reason: `Blocked ${EDITGATE_REASON_TOOL_NAME}: include a non-empty reason and retry.` };
       }
 
       event.input = { reason };
-      queuePendingReason(reason);
+      if (editgateEnabled) {
+        queuePendingReason(reason);
+      }
       return;
     }
 

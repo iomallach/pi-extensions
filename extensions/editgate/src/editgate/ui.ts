@@ -5,12 +5,16 @@ import { spawnSync } from "node:child_process";
 
 import type { ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import { highlightCode } from "@mariozechner/pi-coding-agent";
-import { Key, matchesKey, truncateToWidth, wrapTextWithAnsi, type TUI } from "@mariozechner/pi-tui";
+import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type TUI } from "@mariozechner/pi-tui";
 
 import { kindPrefix } from "./diff.js";
 import type { DiffRow, GateProposal, ReviewUiResult } from "./types.js";
 
-const VIEWPORT_HEIGHT = 18;
+const DEFAULT_VIEWPORT_HEIGHT = 18;
+const MIN_VIEWPORT_HEIGHT = 6;
+const FULLSCREEN_MIN_VIEWPORT_HEIGHT = 1;
+const FULLSCREEN_REASON_MAX_LINES = 2;
+const FOOTER_ROWS = 4;
 
 type RowKind = "context" | "add" | "remove" | "empty";
 
@@ -60,6 +64,45 @@ function createEditorTempPath(targetPath: string): string {
   const extension = extname(targetPath);
   const baseName = basename(targetPath, extension).replace(/[^a-zA-Z0-9._-]+/g, "-") || "editgate";
   return join(tmpdir(), `${baseName}.editgate-${Date.now()}${extension}`);
+}
+
+function joinLeftRight(left: string, right: string, width: number): string {
+  const safeWidth = Math.max(1, width);
+  const rightWidth = Math.min(safeWidth, visibleWidth(right));
+  const availableLeft = Math.max(1, safeWidth - rightWidth - 1);
+  const leftText = truncateToWidth(left, availableLeft, "...", true);
+  const gap = Math.max(1, safeWidth - visibleWidth(leftText) - rightWidth);
+  return truncateToWidth(`${leftText}${" ".repeat(gap)}${right}`, safeWidth, "...", true);
+}
+
+function formatScrollIndicator(offset: number, pageSize: number, total: number, theme: Theme): string {
+  if (total <= 0) {
+    return theme.fg("dim", "scroll 100%");
+  }
+
+  if (total <= pageSize) {
+    return theme.fg("dim", "scroll 100%");
+  }
+
+  const maxOffset = Math.max(1, total - pageSize);
+  const progress = Math.round((Math.min(offset, maxOffset) / maxOffset) * 100);
+  return theme.fg("dim", `scroll ${String(progress).padStart(3, " ")}%`);
+}
+
+function countWrappedLines(text: string, width: number): number {
+  return Math.max(1, wrapTextWithAnsi(text, Math.max(1, width)).length);
+}
+
+function visibleReasonLines(text: string, width: number, fullscreen: boolean): string[] {
+  const wrapped = wrapTextWithAnsi(text, Math.max(1, width));
+  if (!fullscreen || wrapped.length <= FULLSCREEN_REASON_MAX_LINES) {
+    return wrapped;
+  }
+
+  const limited = wrapped.slice(0, FULLSCREEN_REASON_MAX_LINES);
+  const lastIndex = limited.length - 1;
+  limited[lastIndex] = truncateToWidth(`${limited[lastIndex]}…`, Math.max(1, width), "...", true);
+  return limited;
 }
 
 function openProposalInEditor(ctx: ExtensionContext, tui: TUI, proposal: GateProposal): string | undefined {
@@ -120,19 +163,38 @@ function openProposalInEditor(ctx: ExtensionContext, tui: TUI, proposal: GatePro
 export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal): Promise<ReviewUiResult | null> {
   return ctx.ui.custom<ReviewUiResult | null>((tui, theme, _kb, done) => {
     let offset = 0;
+    let fullscreen = false;
     let cached: string[] | undefined;
 
     function totalRows(): number {
       return proposal.diff.rows.length;
     }
 
-    function clampOffset() {
-      offset = Math.max(0, Math.min(offset, Math.max(0, totalRows() - VIEWPORT_HEIGHT)));
+    function headerRows(width: number, pageSize: number): number {
+      const title = fullscreen ? ` Editgate review • ${proposal.path} • fullscreen` : ` Editgate review • ${proposal.path}`;
+      const scrollLabel = formatScrollIndicator(offset, pageSize, totalRows(), theme);
+      const titleRows = countWrappedLines(joinLeftRight(theme.bold(title), scrollLabel, width), width);
+      const reasonRows = visibleReasonLines(theme.fg("muted", proposal.reason), width, fullscreen).length;
+      return 4 + titleRows + reasonRows;
+    }
+
+    function viewportHeight(width: number): number {
+      if (!fullscreen) return DEFAULT_VIEWPORT_HEIGHT;
+
+      let pageSize = Math.max(FULLSCREEN_MIN_VIEWPORT_HEIGHT, tui.terminal.rows - FOOTER_ROWS - 5);
+      for (let index = 0; index < 3; index++) {
+        pageSize = Math.max(FULLSCREEN_MIN_VIEWPORT_HEIGHT, tui.terminal.rows - headerRows(width, pageSize) - FOOTER_ROWS);
+      }
+      return pageSize;
+    }
+
+    function clampOffset(width: number) {
+      offset = Math.max(0, Math.min(offset, Math.max(0, totalRows() - viewportHeight(width))));
     }
 
     function rerender() {
       cached = undefined;
-      clampOffset();
+      clampOffset(tui.terminal.columns);
       tui.requestRender();
     }
 
@@ -148,12 +210,17 @@ export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal
         return;
       }
       if (matchesKey(data, "ctrl+u")) {
-        offset -= Math.max(1, Math.floor(VIEWPORT_HEIGHT / 2));
+        offset -= Math.max(1, Math.floor(viewportHeight(tui.terminal.columns) / 2));
         rerender();
         return;
       }
       if (matchesKey(data, "ctrl+d")) {
-        offset += Math.max(1, Math.floor(VIEWPORT_HEIGHT / 2));
+        offset += Math.max(1, Math.floor(viewportHeight(tui.terminal.columns) / 2));
+        rerender();
+        return;
+      }
+      if (matchesKey(data, "ctrl+f")) {
+        fullscreen = !fullscreen;
         rerender();
         return;
       }
@@ -194,16 +261,29 @@ export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal
         }
       };
       const rows = proposal.diff.rows;
-      const pageEnd = Math.min(rows.length, offset + VIEWPORT_HEIGHT);
+      const pageSize = viewportHeight(width);
+      clampOffset(width);
+      const pageEnd = Math.min(rows.length, offset + pageSize);
+      const title = fullscreen ? ` Editgate review • ${proposal.path} • fullscreen` : ` Editgate review • ${proposal.path}`;
 
       push(theme.fg("accent", "─".repeat(width)));
-      push(theme.bold(` Editgate review • ${proposal.path}`));
+      push(joinLeftRight(theme.bold(title), formatScrollIndicator(offset, pageSize, rows.length, theme), width));
       push(
         `${theme.fg("muted", proposal.toolName.toUpperCase())}  ${theme.fg("dim", "changes:")} ${theme.fg("success", `+${proposal.diff.additions}`)} ${theme.fg("error", `-${proposal.diff.removals}`)}`,
       );
-      pushWrapped(theme.fg("muted", proposal.reason));
-      push(theme.fg("dim", `rows ${rows.length === 0 ? 0 : offset + 1}-${pageEnd} of ${rows.length}`));
+      for (const reasonLine of visibleReasonLines(theme.fg("muted", proposal.reason), width, fullscreen)) {
+        push(reasonLine);
+      }
+      push(
+        joinLeftRight(
+          theme.fg("dim", `rows ${rows.length === 0 ? 0 : offset + 1}-${pageEnd} of ${rows.length}`),
+          theme.fg("dim", fullscreen ? "view fullscreen" : "view default"),
+          width,
+        ),
+      );
       push(theme.fg("accent", "─".repeat(width)));
+
+      const headerLineCount = lines.length;
 
       if (rows.length === 0) {
         push(theme.fg("muted", " No textual changes detected."));
@@ -213,12 +293,12 @@ export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal
         }
       }
 
-      while (lines.length < 6 + VIEWPORT_HEIGHT) {
+      while (lines.length < headerLineCount + pageSize) {
         push();
       }
 
       push(theme.fg("accent", "─".repeat(width)));
-      push(theme.fg("dim", "j/k scroll • ctrl-u/ctrl-d page"));
+      push(theme.fg("dim", "j/k scroll • ctrl-u/ctrl-d page • ctrl-f fullscreen"));
       push(
         [
           theme.fg("success", "a approve"),
