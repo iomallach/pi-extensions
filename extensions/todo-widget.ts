@@ -88,7 +88,7 @@ export default function todoWidgetExtension(pi: ExtensionAPI) {
 
 		ctx.ui.setStatus("todo-widget", ctx.ui.theme.fg("accent", `📋 ${progressText()}`));
 		ctx.ui.setWidget("todo-widget", (_tui, theme) => {
-			const lines = [
+			const text = [
 				theme.fg("accent", theme.bold(`📋 ${state.title}`)) + theme.fg("dim", `  ${progressText()} complete`),
 				...state.items.map((item) => {
 					const marker =
@@ -97,20 +97,17 @@ export default function todoWidgetExtension(pi: ExtensionAPI) {
 							: item.status === "doing"
 								? theme.fg("warning", "◐")
 								: theme.fg("muted", "☐");
-					const text =
+					const itemText =
 						item.status === "done"
 							? theme.fg("muted", theme.strikethrough(item.text))
 							: item.status === "doing"
 								? theme.fg("warning", item.text)
 								: theme.fg("text", item.text);
-					return `${marker} ${theme.fg("dim", `#${item.id}`)} ${text}`;
+					return `${marker} ${theme.fg("dim", `#${item.id}`)} ${itemText}`;
 				}),
-			];
+			].join("\n");
 
-			return {
-				render: () => lines,
-				invalidate: () => {},
-			};
+			return new Text(text, 0, 0);
 		});
 	};
 
