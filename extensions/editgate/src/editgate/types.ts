@@ -57,6 +57,8 @@ export type ReviewAction = "approve" | "deny" | "steer" | "cancel";
 
 export type ReviewUiResult = ReviewAction | { kind: "edit"; nextContent: string };
 
+export type ViewMode = "tui" | "web";
+
 export type ReviewOutcome =
   | { kind: "approve"; proposal: GateProposal }
   | { kind: "deny" }

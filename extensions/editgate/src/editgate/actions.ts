@@ -1,13 +1,15 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 
 import { withEditedContent } from "./proposals.js";
-import type { GateProposal, ReviewOutcome } from "./types.js";
+import type { EditgateServer } from "./server.js";
+import type { GateProposal, ReviewOutcome, ViewMode } from "./types.js";
 import { showReviewUi } from "./ui.js";
 
 export async function reviewProposal(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
   initialProposal: GateProposal,
+  opts: { viewMode: ViewMode; server: EditgateServer },
 ): Promise<ReviewOutcome> {
   let proposal = initialProposal;
 
@@ -15,6 +17,16 @@ export async function reviewProposal(
     return { kind: "approve", proposal };
   }
 
+  // ── Web mode: delegate a single decision round-trip to the browser ────────
+  if (opts.viewMode === "web" && opts.server.isRunning) {
+    const outcome = await opts.server.awaitDecision(proposal);
+    if (outcome.kind === "steer" && !ctx.isIdle()) {
+      pi.sendUserMessage(outcome.feedback, { deliverAs: "steer" });
+    }
+    return outcome;
+  }
+
+  // ── TUI mode: existing terminal UI loop ───────────────────────────────────
   while (true) {
     const action = await showReviewUi(ctx, proposal);
 

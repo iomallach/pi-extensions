@@ -4,7 +4,8 @@ import { Type } from "@sinclair/typebox";
 
 import { reviewProposal } from "./editgate/actions.js";
 import { createEditProposal, createWriteProposal } from "./editgate/proposals.js";
-import type { GateProposal, ReasonedEditToolInput, ReasonedWriteToolInput } from "./editgate/types.js";
+import { EditgateServer } from "./editgate/server.js";
+import type { GateProposal, ReasonedEditToolInput, ReasonedWriteToolInput, ViewMode } from "./editgate/types.js";
 
 const EDITGATE_STATUS_KEY = "editgate";
 const EDITGATE_REASON_TOOL_NAME = "set_change_reason";
@@ -46,9 +47,9 @@ function applyApprovedWriteMutation(event: ToolCallEvent, proposal: GateProposal
   event.input.content = proposal.nextContent;
 }
 
-function formatEditgateStatus(enabled: boolean): string {
+function formatEditgateStatus(enabled: boolean, viewMode: ViewMode): string {
   const color = enabled ? ANSI_GREEN : ANSI_RED;
-  return `${color}editgate ${enabled ? "on" : "off"}${ANSI_RESET}`;
+  return `${color}editgate ${enabled ? "on" : "off"} · ${viewMode}${ANSI_RESET}`;
 }
 
 function normalizeReason(reason: string | undefined): string | undefined {
@@ -58,6 +59,8 @@ function normalizeReason(reason: string | undefined): string | undefined {
 
 export default function editgate(pi: ExtensionAPI) {
   let editgateEnabled = true;
+  let viewMode: ViewMode = "tui";
+  const server = new EditgateServer();
   const pendingReasons: string[] = [];
 
   const clearPendingReasons = () => {
@@ -90,7 +93,7 @@ export default function editgate(pi: ExtensionAPI) {
   };
 
   const setStatus = (ctx: { ui: { setStatus: (key: string, text: string | undefined) => void } }) => {
-    ctx.ui.setStatus(EDITGATE_STATUS_KEY, formatEditgateStatus(editgateEnabled));
+    ctx.ui.setStatus(EDITGATE_STATUS_KEY, formatEditgateStatus(editgateEnabled, viewMode));
   };
 
   const updateEnabled = (
@@ -136,11 +139,15 @@ export default function editgate(pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     clearPendingReasons();
     syncReasonToolActivation();
+    if (viewMode === "web" && !server.isRunning) {
+      await server.start();
+    }
     setStatus(ctx);
   });
 
   pi.on("session_shutdown", async (_event, ctx) => {
     clearPendingReasons();
+    await server.stop();
     ctx.ui.setStatus(EDITGATE_STATUS_KEY, undefined);
   });
 
@@ -179,6 +186,23 @@ export default function editgate(pi: ExtensionAPI) {
     },
   });
 
+  pi.registerCommand("editgate:toggle-view", {
+    description: "Switch editgate diff view between terminal UI and web browser",
+    handler: async (_args, ctx) => {
+      if (viewMode === "tui") {
+        viewMode = "web";
+        await server.start();
+        setStatus(ctx);
+        ctx.ui.notify(`editgate web UI · ${server.url}`, "info");
+      } else {
+        viewMode = "tui";
+        await server.stop();
+        setStatus(ctx);
+        ctx.ui.notify("editgate switched to terminal UI", "info");
+      }
+    },
+  });
+
   pi.on("tool_call", async (event, ctx) => {
     setStatus(ctx);
 
@@ -212,7 +236,7 @@ export default function editgate(pi: ExtensionAPI) {
       }
 
       const proposal = await createEditProposal(ctx.cwd, proposalInput);
-      const outcome = await reviewProposal(pi, ctx, proposal);
+      const outcome = await reviewProposal(pi, ctx, proposal, { viewMode, server });
 
       if (outcome.kind === "approve") {
         applyApprovedEditMutation(event, outcome.proposal);
@@ -240,7 +264,7 @@ export default function editgate(pi: ExtensionAPI) {
       }
 
       const proposal = await createWriteProposal(ctx.cwd, proposalInput);
-      const outcome = await reviewProposal(pi, ctx, proposal);
+      const outcome = await reviewProposal(pi, ctx, proposal, { viewMode, server });
 
       if (outcome.kind === "approve") {
         applyApprovedWriteMutation(event, outcome.proposal);
