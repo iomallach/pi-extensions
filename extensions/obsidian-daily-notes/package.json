@@ -1,0 +1,8 @@
+{
+  "name": "obsidian-daily-notes",
+  "version": "1.0.0",
+  "description": "Auto-logs accomplishments and decisions to Obsidian daily notes",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
