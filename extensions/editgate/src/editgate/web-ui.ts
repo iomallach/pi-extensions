@@ -222,7 +222,7 @@ export function buildWebUiHtml(): string {
   <button class="btn-edit"    id="btn-edit">✎ Edit</button>
   <button class="btn-steer"   id="btn-steer">⇝ Steer</button>
   <button class="btn-deny"    id="btn-deny">✕ Deny</button>
-  <span id="shortcuts">a&nbsp;approve&nbsp;·&nbsp;e&nbsp;edit&nbsp;·&nbsp;s&nbsp;steer&nbsp;·&nbsp;d&nbsp;deny&nbsp;·&nbsp;esc&nbsp;cancel</span>
+  <span id="shortcuts">g/G&nbsp;top/bottom&nbsp;·&nbsp;a&nbsp;approve&nbsp;·&nbsp;e&nbsp;edit&nbsp;·&nbsp;s&nbsp;steer&nbsp;·&nbsp;d&nbsp;deny&nbsp;·&nbsp;esc&nbsp;cancel</span>
   <button class="btn-cancel"  id="btn-cancel">Cancel</button>
 </div>
 
@@ -367,6 +367,12 @@ export function buildWebUiHtml(): string {
     decide({ kind: "approve", nextContent: nextContent });
   }
 
+  function scrollDiffToBoundary(boundary) {
+    if (!diffEditor) return;
+    var editor = diffEditor.getModifiedEditor();
+    editor.setScrollTop(boundary === "top" ? 0 : editor.getScrollHeight());
+  }
+
   function toggleEditMode() {
     if (!proposal) return;
     editMode = !editMode;
@@ -416,6 +422,14 @@ export function buildWebUiHtml(): string {
       if (tag === "TEXTAREA" || tag === "INPUT") return;
 
       switch (e.key) {
+        case "g":
+          e.preventDefault();
+          scrollDiffToBoundary("top");
+          break;
+        case "G":
+          e.preventDefault();
+          scrollDiffToBoundary("bottom");
+          break;
         case "a": case "A": doApprove(); break;
         case "e": case "E": toggleEditMode(); break;
         case "s": case "S": toggleSteerPanel(); break;

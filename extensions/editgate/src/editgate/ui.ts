@@ -209,6 +209,16 @@ export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal
         rerender();
         return;
       }
+      if (matchesKey(data, "g")) {
+        offset = 0;
+        rerender();
+        return;
+      }
+      if (matchesKey(data, "shift+g")) {
+        offset = Math.max(0, totalRows() - viewportHeight(tui.terminal.columns));
+        rerender();
+        return;
+      }
       if (matchesKey(data, "ctrl+u")) {
         offset -= Math.max(1, Math.floor(viewportHeight(tui.terminal.columns) / 2));
         rerender();
@@ -298,7 +308,7 @@ export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal
       }
 
       push(theme.fg("accent", "─".repeat(width)));
-      push(theme.fg("dim", "j/k scroll • ctrl-u/ctrl-d page • ctrl-f fullscreen"));
+      push(theme.fg("dim", "j/k scroll • g/G top/bottom • ctrl-u/ctrl-d page • ctrl-f fullscreen"));
       push(
         [
           theme.fg("success", "a approve"),
