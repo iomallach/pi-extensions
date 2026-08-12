@@ -222,7 +222,7 @@ export function buildWebUiHtml(): string {
   <button class="btn-edit"    id="btn-edit">✎ Edit</button>
   <button class="btn-steer"   id="btn-steer">⇝ Steer</button>
   <button class="btn-deny"    id="btn-deny">✕ Deny</button>
-  <span id="shortcuts">g/G&nbsp;top/bottom&nbsp;·&nbsp;a&nbsp;approve&nbsp;·&nbsp;e&nbsp;edit&nbsp;·&nbsp;s&nbsp;steer&nbsp;·&nbsp;d&nbsp;deny&nbsp;·&nbsp;esc&nbsp;cancel</span>
+  <span id="shortcuts">g/G&nbsp;top/bottom&nbsp;·&nbsp;h/H&nbsp;prev/next&nbsp;hunk&nbsp;·&nbsp;a&nbsp;approve&nbsp;·&nbsp;e&nbsp;edit&nbsp;·&nbsp;s&nbsp;steer&nbsp;·&nbsp;d&nbsp;deny&nbsp;·&nbsp;esc&nbsp;cancel</span>
   <button class="btn-cancel"  id="btn-cancel">Cancel</button>
 </div>
 
@@ -373,6 +373,11 @@ export function buildWebUiHtml(): string {
     editor.setScrollTop(boundary === "top" ? 0 : editor.getScrollHeight());
   }
 
+  function navigateDiffHunk(direction) {
+    if (!diffEditor) return;
+    diffEditor.goToDiff(direction);
+  }
+
   function toggleEditMode() {
     if (!proposal) return;
     editMode = !editMode;
@@ -429,6 +434,14 @@ export function buildWebUiHtml(): string {
         case "G":
           e.preventDefault();
           scrollDiffToBoundary("bottom");
+          break;
+        case "h":
+          e.preventDefault();
+          navigateDiffHunk("previous");
+          break;
+        case "H":
+          e.preventDefault();
+          navigateDiffHunk("next");
           break;
         case "a": case "A": doApprove(); break;
         case "e": case "E": toggleEditMode(); break;

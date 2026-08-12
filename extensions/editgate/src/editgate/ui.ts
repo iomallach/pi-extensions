@@ -17,6 +17,23 @@ const FULLSCREEN_REASON_MAX_LINES = 2;
 const FOOTER_ROWS = 4;
 
 type RowKind = "context" | "add" | "remove" | "empty";
+type HunkDirection = "previous" | "next";
+
+function findHunkOffset(rows: DiffRow[], offset: number, direction: HunkDirection): number | undefined {
+  const step = direction === "previous" ? -1 : 1;
+  let index = offset + step;
+
+  while (index >= 0 && index < rows.length) {
+    const row = rows[index]!;
+    const previousRow = rows[index - 1];
+    if (row.kind !== "context" && (index === 0 || previousRow?.kind === "context")) {
+      return index;
+    }
+    index += step;
+  }
+
+  return undefined;
+}
 
 function padLineNumber(value?: number): string {
   return value === undefined ? "    " : String(value).padStart(4, " ");
@@ -198,6 +215,14 @@ export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal
       tui.requestRender();
     }
 
+    function jumpToHunk(direction: HunkDirection) {
+      const hunkOffset = findHunkOffset(proposal.diff.rows, offset, direction);
+      if (hunkOffset === undefined) return;
+
+      offset = hunkOffset;
+      rerender();
+    }
+
     function handleInput(data: string) {
       if (matchesKey(data, Key.up) || data === "k") {
         offset -= 1;
@@ -217,6 +242,14 @@ export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal
       if (matchesKey(data, "shift+g")) {
         offset = Math.max(0, totalRows() - viewportHeight(tui.terminal.columns));
         rerender();
+        return;
+      }
+      if (matchesKey(data, "h")) {
+        jumpToHunk("previous");
+        return;
+      }
+      if (matchesKey(data, "shift+h")) {
+        jumpToHunk("next");
         return;
       }
       if (matchesKey(data, "ctrl+u")) {
@@ -308,7 +341,7 @@ export async function showReviewUi(ctx: ExtensionContext, proposal: GateProposal
       }
 
       push(theme.fg("accent", "─".repeat(width)));
-      push(theme.fg("dim", "j/k scroll • g/G top/bottom • ctrl-u/ctrl-d page • ctrl-f fullscreen"));
+      push(theme.fg("dim", "j/k scroll • g/G top/bottom • h/H prev/next hunk • ctrl-u/ctrl-d page • ctrl-f fullscreen"));
       push(
         [
           theme.fg("success", "a approve"),
