@@ -128,8 +128,8 @@ export default function editgate(pi: ExtensionAPI) {
     },
   });
 
-  pi.on("before_agent_start", async (event) => {
-    if (!editgateEnabled) return undefined;
+  pi.on("before_agent_start", async (event, ctx) => {
+    if (!editgateEnabled || !ctx.hasUI) return undefined;
 
     return {
       systemPrompt: `${event.systemPrompt}\n\n${EDITGATE_REASON_GUIDANCE}`,
@@ -138,7 +138,9 @@ export default function editgate(pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     clearPendingReasons();
-    syncReasonToolActivation();
+    if (ctx.hasUI) {
+      syncReasonToolActivation();
+    }
     if (viewMode === "web" && !server.isRunning) {
       await server.start();
     }
@@ -205,6 +207,10 @@ export default function editgate(pi: ExtensionAPI) {
 
   pi.on("tool_call", async (event, ctx) => {
     setStatus(ctx);
+
+    if (!ctx.hasUI) {
+      return;
+    }
 
     if (event.toolName === EDITGATE_REASON_TOOL_NAME) {
       const reason = normalizeReason((event.input as { reason?: string } | undefined)?.reason);
