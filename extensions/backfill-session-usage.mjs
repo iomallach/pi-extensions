@@ -107,6 +107,15 @@ function asNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function addUsage(totals, usage) {
+  totals.inputTokens += asNumber(usage?.input);
+  totals.outputTokens += asNumber(usage?.output);
+  totals.cacheReadTokens += asNumber(usage?.cacheRead);
+  totals.cacheWriteTokens += asNumber(usage?.cacheWrite);
+  totals.totalTokens += asNumber(usage?.totalTokens);
+  totals.totalCost += asNumber(usage?.cost?.total);
+}
+
 function countEditsFromArgs(args) {
   if (!args || typeof args !== "object") return 1;
   const edits = args.edits;
@@ -194,6 +203,11 @@ function parseSessionFile(sessionFile) {
       continue;
     }
 
+    if (entry.type === "usage") {
+      addUsage(totals, entry.usage);
+      continue;
+    }
+
     if (
       entry.type !== "message" ||
       !entry.message ||
@@ -204,12 +218,7 @@ function parseSessionFile(sessionFile) {
 
     const message = entry.message;
     if (message.role === "assistant") {
-      totals.inputTokens += asNumber(message.usage?.input);
-      totals.outputTokens += asNumber(message.usage?.output);
-      totals.cacheReadTokens += asNumber(message.usage?.cacheRead);
-      totals.cacheWriteTokens += asNumber(message.usage?.cacheWrite);
-      totals.totalTokens += asNumber(message.usage?.totalTokens);
-      totals.totalCost += asNumber(message.usage?.cost?.total);
+      addUsage(totals, message.usage);
 
       const provider = normalizeModelPart(message.provider, "unknown-provider");
       const model = normalizeModelPart(message.model, "unknown-model");

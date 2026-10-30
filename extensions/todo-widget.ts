@@ -156,6 +156,7 @@ export default function todoWidgetExtension(pi: ExtensionAPI) {
 	});
 
 	pi.on("before_agent_start", async (event) => {
+		if (!("prompt" in event)) return;
 		const prompt = event.prompt.trim().toLowerCase();
 		const looksMultiStep =
 			prompt.includes("plan") ||

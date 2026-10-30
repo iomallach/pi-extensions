@@ -459,6 +459,7 @@ export default function taskTrackerExtension(pi: ExtensionAPI) {
 	});
 
 	pi.on("before_agent_start", async (event) => {
+		if (!("prompt" in event)) return;
 		if (!looksMultiStep(event.prompt)) return;
 		const base = [
 			"For work with more than 2 steps, use the track_tasks tool early.",

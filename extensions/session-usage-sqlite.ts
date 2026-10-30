@@ -3,10 +3,15 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
+import type { Usage } from "@mariozechner/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionContext,
+  SessionEntry,
 } from "@mariozechner/pi-coding-agent";
+
+// Keep the 1.x entry shape local so this also type-checks against Pi 0.85.1.
+type UsageEntry = { type: "usage"; usage: Usage };
 
 type UsageTotals = {
   inputTokens: number;
@@ -82,6 +87,15 @@ function asNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function addUsage(totals: UsageTotals, usage: Usage | undefined): void {
+  totals.inputTokens += asNumber(usage?.input);
+  totals.outputTokens += asNumber(usage?.output);
+  totals.cacheReadTokens += asNumber(usage?.cacheRead);
+  totals.cacheWriteTokens += asNumber(usage?.cacheWrite);
+  totals.totalTokens += asNumber(usage?.totalTokens);
+  totals.totalCost += asNumber(usage?.cost?.total);
+}
+
 function countEditsFromArgs(args: Record<string, unknown> | undefined): number {
   if (!args) return 1;
   const edits = args.edits;
@@ -108,18 +122,19 @@ function collectTotals(ctx: ExtensionContext): UsageTotals {
   };
 
   const toolCallArgsById = new Map<string, Record<string, unknown>>();
+  const entries: readonly (SessionEntry | UsageEntry)[] =
+    ctx.sessionManager.getEntries();
 
-  for (const entry of ctx.sessionManager.getEntries()) {
+  for (const entry of entries) {
+    if (entry.type === "usage") {
+      addUsage(totals, entry.usage);
+      continue;
+    }
     if (entry.type !== "message") continue;
     const message = entry.message;
 
     if (message.role === "assistant") {
-      totals.inputTokens += asNumber(message.usage?.input);
-      totals.outputTokens += asNumber(message.usage?.output);
-      totals.cacheReadTokens += asNumber(message.usage?.cacheRead);
-      totals.cacheWriteTokens += asNumber(message.usage?.cacheWrite);
-      totals.totalTokens += asNumber(message.usage?.totalTokens);
-      totals.totalCost += asNumber(message.usage?.cost?.total);
+      addUsage(totals, message.usage);
 
       for (const block of message.content) {
         const toolCall = block as ToolCallArgs;
@@ -183,6 +198,7 @@ export default function sessionUsageSqliteExtension(pi: ExtensionAPI) {
     if (!sessionFile) return;
 
     const header = ctx.sessionManager.getHeader();
+    if (!header) return;
     const startedAt = header.timestamp;
     const endedAt = new Date().toISOString();
     const durationMs = Math.max(0, Date.parse(endedAt) - Date.parse(startedAt));
